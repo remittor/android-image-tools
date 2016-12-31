@@ -84,13 +84,26 @@ data = struct.unpack("III", zimg_file.read(4*3))
 if (data[0] != 0x016f2818):
   die("ERROR: Can't found IMG magic number")
 zimg_size = data[2]
-if (zimg_size != os.path.getsize(zimg_fn)):
-  die("ERROR: zImage size != %d" % zimg_size)
+
+zfile_size = os.path.getsize(zimg_fn)
+if (zfile_size < zimg_size):
+  die("ERROR: zImage size: %d (expected: %d)" % (zfile_size, zimg_size))
+
+zimg_footer = ''
+if (zfile_size > zimg_size):
+  zimg_file.seek(zimg_size)
+  zimg_footer = zimg_file.read()
+  
 zimg_file.seek(0)
-zimg = zimg_file.read()
+zimg = zimg_file.read(zimg_size)
 gz_begin = zimg.find('\x1F\x8B\x08\x00')
 if (gz_begin < 0x24):
   die("ERROR: Can't found GZIP magic header")
+
+zimg_file.close()
+zimg_file = StringIO.StringIO()
+zimg_file.write(zimg)
+
 zimg_file.seek(gz_begin + 8)
 data = struct.unpack("BB", zimg_file.read(2))
 ext_flags = data[0]
@@ -129,7 +142,7 @@ knew_file = open(knew_fn, 'rb')
 knew_data = knew_file.read()
 knew_file.close()
 
-new_gz_data = StringIO.StringIO()  
+new_gz_data = StringIO.StringIO()
 with gzip.GzipFile(fileobj = new_gz_data, mode = 'wb') as f:
   f.write(knew_data)
 new_gz_data.seek(9)
@@ -154,6 +167,7 @@ new_zimg_file.write(new_gz_data.getvalue())
 new_zimg_file.write('\0'*(gz_size - new_gz_size))
 zimg_file.seek(gz_end)
 new_zimg_file.write(zimg_file.read())
+new_zimg_file.write(zimg_footer)
 new_zimg_file.close()
 
 zimg_file.close()
